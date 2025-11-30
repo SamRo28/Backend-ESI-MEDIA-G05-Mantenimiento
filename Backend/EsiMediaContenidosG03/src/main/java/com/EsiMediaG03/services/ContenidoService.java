@@ -411,6 +411,15 @@ public class ContenidoService {
     return res;
 }
 
+    public Double getMyRating(String contenidoId, String userEmail) {
+        if (userEmail == null || userEmail.isBlank()) return null;
+        Contenido c = contenidoDAO.findById(contenidoId)
+                .orElseThrow(() -> new ContenidoException(CONTENIDO_NO_ENCONTRADO + " " + contenidoId));
+        Map<String, Double> ratings = c.getRatings();
+        if (ratings == null) return null;
+        String key = mapKeyForEmail(userEmail);
+        return ratings.containsKey(key) ? ratings.get(key) : null;
+    }
 
     public void addFavorito(String contenidoId, String userEmail, String roleHeader) {
         String email = (userEmail != null && !userEmail.isBlank()) ? userEmail : currentUserEmailOrNull();
