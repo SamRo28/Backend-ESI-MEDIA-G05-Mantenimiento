@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.EsiMediaG03.dto.ModificarContenidoRequest;
 import com.EsiMediaG03.dto.StreamingTarget;
@@ -250,6 +252,23 @@ public class ContenidoController {
     public ResponseEntity<Map<String,Object>> ratingContenido(@PathVariable String id) {
         Map<String,Object> res = contenidoService.ratingResumen(id);
         return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(path = "/{id}/upload-audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String,Object>> uploadAudio(@PathVariable String id,
+                                                          @RequestPart("file") MultipartFile file,
+                                                          @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
+        String email = resolveEmail(xUserEmail);
+        try {
+            var updated = contenidoService.storeAudioFile(id, file, email);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("fichero", updated.getFicheroAudio()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping(path = "/{id}/favorito", consumes = MediaType.ALL_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

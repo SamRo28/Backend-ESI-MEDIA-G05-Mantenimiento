@@ -3,6 +3,9 @@ package com.EsiMediaG03.services;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.io.InputStream;
+import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -21,6 +24,8 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -43,6 +48,9 @@ public class ContenidoService {
     private final ContenidoDAO contenidoDAO;
     private final MongoTemplate mongoTemplate;
     private final ListaPublicaDAO listaPublicaDAO;
+    
+    @Value("${audio.storage.path}")
+    private String audioStoragePath;
 
     private static final String VIDEO_MP4 = "video/mp4";
     private static final String CONTENIDO_NO_ENCONTRADO = "Contenido no encontrado: ";
@@ -552,5 +560,69 @@ public class ContenidoService {
                     return m;
                 })
                 .toList();
+    }
+
+    /**
+     * Guarda un archivo de audio en disco y actualiza el campo `ficheroAudio` del contenido.
+     * La ruta almacenada será relativa a la carpeta configurada en `audio.storage.path`.
+     */
+    public Contenido storeAudioFile(String contenidoId, MultipartFile file, String userEmail) throws IOException {
+        if (userEmail == null || userEmail.isBlank()) {
+            throw new AccessDeniedException("Debes iniciar sesión para subir archivos");
+        }
+
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Archivo vacío");
+        }
+
+        String mime = file.getContentType();
+        if (mime == null || !(mime.equalsIgnoreCase("audio/mpeg") || mime.equalsIgnoreCase("audio/mp3"))) {
+            throw new IllegalArgumentException("Tipo MIME no soportado: " + mime);
+        }
+
+        String original = file.getOriginalFilename();
+        if (original == null || !original.toLowerCase().endsWith(".mp3")) {
+            throw new IllegalArgumentException("Extensión no válida: se requiere .mp3");
+        }
+
+        // Validar magic bytes (primeros bytes)
+        byte[] head = file.getInputStream().readNBytes(12);
+        if (!isMp3ByMagicBytes(head)) {
+            throw new IllegalArgumentException("El archivo no parece ser un MP3 válido");
+        }
+
+        Contenido c = contenidoDAO.findById(contenidoId)
+                .orElseThrow(() -> new ContenidoException(CONTENIDO_NO_ENCONTRADO + " " + contenidoId));
+
+        // Crear carpeta de almacenamiento: la ruta debe estar configurada en application.properties
+        if (this.audioStoragePath == null || this.audioStoragePath.isBlank()) {
+            throw new IllegalStateException("Propiedad 'audio.storage.path' no configurada. Define 'audio.storage.path' en application.properties");
+        }
+        Path storage = Path.of(this.audioStoragePath).toAbsolutePath().normalize();
+        Files.createDirectories(storage);
+
+        String filename = UUID.randomUUID().toString() + ".mp3";
+        Path target = storage.resolve(filename);
+
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // Guardar ruta relativa (carpeta/archivo)
+        String relative = storage.getFileName() != null ? storage.getFileName().toString() + "/" + filename : filename;
+        c.setFicheroAudio(relative);
+        return contenidoDAO.save(c);
+    }
+
+    private boolean isMp3ByMagicBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) return false;
+        int b0 = bytes[0] & 0xFF;
+        int b1 = bytes[1] & 0xFF;
+        int b2 = bytes[2] & 0xFF;
+        // ID3
+        if (b0 == 0x49 && b1 == 0x44 && b2 == 0x33) return true;
+        // Frame sync
+        if (b0 == 0xFF && (b1 & 0xE0) == 0xE0) return true;
+        return false;
     }
 }
