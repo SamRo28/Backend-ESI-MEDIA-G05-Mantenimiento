@@ -13,6 +13,7 @@ import org.springframework.data.annotation.Transient;
 
 @Document(collection = "users")
 public class User {
+
     public enum Role {
         USUARIO, GESTOR_CONTENIDO, ADMINISTRADOR
     }
@@ -75,6 +76,7 @@ public class User {
     private AdminApprovalStatus adminApprovalStatus = AdminApprovalStatus.NONE;
     private LocalDateTime pwdChangedAt;
     private List<String> pwdHistory = new ArrayList<>();
+    private List<Alert> alertInbox = new ArrayList<>();
     public User() { this.id = UUID.randomUUID().toString(); }
 
     public String getId() { return id; }
@@ -170,4 +172,17 @@ public class User {
     public void setPwdHistory(List<String> pwdHistory) { this.pwdHistory = pwdHistory; }
     public LocalDateTime getPwdChangedAt() { return pwdChangedAt; }
     public void setPwdChangedAt(LocalDateTime pwdChangedAt) { this.pwdChangedAt = pwdChangedAt; }
+    public List<Alert> getAlertInbox() {
+        if (alertInbox == null) alertInbox = new ArrayList<>();
+        return alertInbox;
+    }
+    public void setAlertInbox(List<Alert> alertInbox) { this.alertInbox = alertInbox; }
+    public void addAlert(Alert alert) {
+        if (alert == null) return;
+        getAlertInbox().add(alert);
+    }
+    public boolean removeAlertById(String alertId) {
+        if (alertId == null || alertId.isBlank()) return false;
+        return getAlertInbox().removeIf(a -> alertId.equals(a.getId()));
+    }
 }   

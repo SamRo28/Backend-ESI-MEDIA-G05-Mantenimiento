@@ -29,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.usersbe.dto.AdminCreationRequest;
 import com.example.usersbe.exceptions.ForbiddenException;
 import com.example.usersbe.exceptions.ValidationException;
+import com.example.usersbe.model.Alert;
 import com.example.usersbe.model.User;
 import com.example.usersbe.services.UserService;
 
@@ -60,6 +61,7 @@ public class UserController {
     private static final String FIELD_ESPECIALIDAD = "especialidad";
     private static final String FIELD_TIPO_CONTENIDO = "tipoContenido";
     private static final String FIELD_DEPARTAMENTO = "departamento";
+    private static final String FIELD_ALERT_ID = "alertId";
     private static final String STATUS = "status";
 
 
@@ -296,6 +298,32 @@ public void registrar(@RequestBody Map<String, String> info) {
     @GetMapping("/listarUsuarios")
     public List<User> getAll() {
         return userService.listarUsuarios();
+    }
+
+    @GetMapping("/alertas")
+    public ResponseEntity<?> listarAlertas(@RequestParam String email) {
+        try {
+            List<Alert> alertas = userService.listarAlertas(email);
+            return ResponseEntity.ok(alertas);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/alertas/{alertId}")
+    public ResponseEntity<?> eliminarAlerta(@PathVariable("alertId") String alertId,
+                                            @RequestParam String email) {
+        try {
+            userService.eliminarAlertaUsuario(email, alertId);
+            return ResponseEntity.noContent().build();
+        } catch (com.example.usersbe.exceptions.UserNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage(), FIELD_ALERT_ID, alertId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage(), FIELD_ALERT_ID, alertId));
+        }
     }
 
 

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,8 @@ import com.example.usersbe.exceptions.NotAnAdminException;
 import com.example.usersbe.exceptions.SuperAdminProtectionException;
 import com.example.usersbe.exceptions.UserDeletionNotAllowedException;
 import com.example.usersbe.exceptions.UserNotFoundException;
+import com.example.usersbe.exceptions.ValidationException;
+import com.example.usersbe.model.Alert;
 import com.example.usersbe.model.User;
 
 import jakarta.mail.MessagingException;
@@ -332,11 +335,44 @@ public class UserService {
     }
 
     public User getUserByEmail(String email) {
-        User user = userDao.findByEmail(email);
+        User user = userDao.findByEmail(normalizeEmail(email));
         if (user == null) {
             throw new UserNotFoundException(USER_NOT_FOUND);
         }
         return user;
+    }
+
+    public List<Alert> listarAlertas(String email) {
+        User u = getUserByEmail(email);
+        return u.getAlertInbox();
+    }
+
+    public Alert agregarAlertaAUsuario(String email, Alert alerta) {
+        if (alerta == null) {
+            throw new ValidationException("La alerta no puede ser nula");
+        }
+        User u = getUserByEmail(email);
+        if (alerta.getId() == null || alerta.getId().isBlank()) {
+            alerta.setId(UUID.randomUUID().toString());
+        }
+        if (alerta.getCreadaEn() == null) {
+            alerta.setCreadaEn(LocalDateTime.now());
+        }
+        u.addAlert(alerta);
+        userDao.save(u);
+        return alerta;
+    }
+
+    public void eliminarAlertaUsuario(String email, String alertaId) {
+        if (alertaId == null || alertaId.trim().isEmpty()) {
+            throw new ValidationException("El id de la alerta es obligatorio");
+        }
+        User u = getUserByEmail(email);
+        boolean removed = u.removeAlertById(alertaId.trim());
+        if (!removed) {
+            throw new ValidationException("La alerta indicada no existe para el usuario");
+        }
+        userDao.save(u);
     }
 
     public User actualizarCreador(String id, String alias, String nombre,
