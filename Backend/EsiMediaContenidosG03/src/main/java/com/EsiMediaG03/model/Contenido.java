@@ -32,6 +32,7 @@ public class Contenido {
     private boolean visible;
     private LocalDateTime fechaEstado = LocalDateTime.now();
     private LocalDateTime disponibleHasta;
+    private LocalDateTime alertCaducidadSentAt;
     private LocalDate disponibilidadContenido;
     private int restringidoEdad;
     private Tipo tipo;
@@ -147,6 +148,14 @@ public class Contenido {
 
     public void setDisponibleHasta(LocalDateTime disponibleHasta) {
         this.disponibleHasta = disponibleHasta;
+    }
+
+    public LocalDateTime getAlertCaducidadSentAt() {
+        return alertCaducidadSentAt;
+    }
+
+    public void setAlertCaducidadSentAt(LocalDateTime alertCaducidadSentAt) {
+        this.alertCaducidadSentAt = alertCaducidadSentAt;
     }
 
     public int getRestringidoEdad() {

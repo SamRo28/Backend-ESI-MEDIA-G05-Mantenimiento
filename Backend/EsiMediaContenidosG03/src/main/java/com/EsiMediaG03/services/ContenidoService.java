@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +80,19 @@ public class ContenidoService {
 
 
     public List<Contenido> listarContenidos() {
-        return contenidoDAO.findAll();
+        List<Contenido> all = contenidoDAO.findAll();
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.util.List<Contenido> toUpdate = new ArrayList<>();
+        for (Contenido c : all) {
+            if (c.getDisponibleHasta() != null && !c.getDisponibleHasta().isAfter(now) && c.isVisible()) {
+                c.setVisible(false);
+                toUpdate.add(c);
+            }
+        }
+        if (!toUpdate.isEmpty()) {
+            contenidoDAO.saveAll(toUpdate);
+        }
+        return all;
     }
 
     public Contenido modificarContenido(String id,
@@ -115,7 +128,8 @@ public class ContenidoService {
         if (c.disponibleHasta != null) actual.setDisponibleHasta(c.disponibleHasta);
         if (c.restringidoEdad != null) actual.setRestringidoEdad(c.restringidoEdad);
         setIfText(actual::setImagen, c.imagen);
-        if (actual.getDisponibleHasta() != null && actual.getDisponibleHasta().isBefore(LocalDateTime.now())) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        if (actual.getDisponibleHasta() != null && !actual.getDisponibleHasta().isAfter(now)) {
             actual.setVisible(false);
         }
     }
@@ -411,15 +425,16 @@ public class ContenidoService {
     return res;
 }
 
-    public Double getMyRating(String contenidoId, String userEmail) {
+    public Double getMyRating(String id, String userEmail) {
         if (userEmail == null || userEmail.isBlank()) return null;
-        Contenido c = contenidoDAO.findById(contenidoId)
-                .orElseThrow(() -> new ContenidoException(CONTENIDO_NO_ENCONTRADO + " " + contenidoId));
+        Contenido c = contenidoDAO.findById(id)
+                .orElseThrow(() -> new ContenidoException(CONTENIDO_NO_ENCONTRADO + " " + id));
         Map<String, Double> ratings = c.getRatings();
-        if (ratings == null) return null;
+        if (ratings == null || ratings.isEmpty()) return null;
         String key = mapKeyForEmail(userEmail);
-        return ratings.containsKey(key) ? ratings.get(key) : null;
+        return ratings.getOrDefault(key, null);
     }
+
 
     public void addFavorito(String contenidoId, String userEmail, String roleHeader) {
         String email = (userEmail != null && !userEmail.isBlank()) ? userEmail : currentUserEmailOrNull();
