@@ -150,6 +150,7 @@ public class ContenidoService {
 
     private static boolean hasText(String s){ return s != null && !s.isBlank(); }
     private static final String AUDIO_DEFAULT = "audio/mpeg";
+    private static final java.util.List<String> ALLOWED_MIME_TYPES = java.util.List.of("audio/mpeg", "audio/mp3");
 
     private final TipoOps audioOps = new TipoOps() {
         @Override public void patch(Contenido actual, ModificarContenidoRequest c) {
@@ -576,18 +577,22 @@ public class ContenidoService {
         }
 
         String mime = file.getContentType();
-        if (mime == null || !(mime.equalsIgnoreCase("audio/mpeg") || mime.equalsIgnoreCase("audio/mp3"))) {
+        if (mime == null || ALLOWED_MIME_TYPES.stream().noneMatch(m -> m.equalsIgnoreCase(mime))) {
             throw new IllegalArgumentException("Tipo MIME no soportado: " + mime);
         }
 
         String original = file.getOriginalFilename();
-        if (original == null || !original.toLowerCase().endsWith(".mp3")) {
+        if (original == null || original.trim().isEmpty()) {
+            throw new IllegalArgumentException("El archivo debe tener un nombre válido");
+        }
+        if (!original.toLowerCase().endsWith(".mp3")) {
             throw new IllegalArgumentException("Extensión no válida: se requiere .mp3");
         }
 
-        // Validar magic bytes (primeros bytes)
+        // Validar magic bytes (primeros bytes) y detectar formato
         byte[] head = file.getInputStream().readNBytes(12);
-        if (!isMp3ByMagicBytes(head)) {
+        String formato = detectarFormatoPorMagicBytes(head);
+        if (!"mp3".equals(formato)) {
             throw new IllegalArgumentException("El archivo no parece ser un MP3 válido");
         }
 
@@ -614,15 +619,26 @@ public class ContenidoService {
         return contenidoDAO.save(c);
     }
 
-    private boolean isMp3ByMagicBytes(byte[] bytes) {
-        if (bytes == null || bytes.length < 4) return false;
-        int b0 = bytes[0] & 0xFF;
-        int b1 = bytes[1] & 0xFF;
-        int b2 = bytes[2] & 0xFF;
-        // ID3
-        if (b0 == 0x49 && b1 == 0x44 && b2 == 0x33) return true;
-        // Frame sync
-        if (b0 == 0xFF && (b1 & 0xE0) == 0xE0) return true;
-        return false;
+    private String detectarFormatoPorMagicBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) return null;
+        int[] u = new int[bytes.length];
+        for (int i = 0; i < bytes.length; i++) u[i] = bytes[i] & 0xFF;
+
+        // MP3: ID3v2
+        if (u[0] == 0x49 && u[1] == 0x44 && u[2] == 0x33) return "mp3";
+        // MP3: frame sync
+        if (u[0] == 0xFF && (u[1] & 0xE0) == 0xE0) return "mp3";
+
+        // WAV: 'RIFF' .... 'WAVE'
+        if (u.length >= 12 && u[0] == 0x52 && u[1] == 0x49 && u[2] == 0x46 && u[3] == 0x46
+                && u[8] == 0x57 && u[9] == 0x41 && u[10] == 0x56 && u[11] == 0x45) return "wav";
+
+        // OGG: 'OggS'
+        if (u[0] == 0x4F && u[1] == 0x67 && u[2] == 0x67 && u[3] == 0x53) return "ogg";
+
+        // M4A/AAC: 'ftyp' at 4-7
+        if (u.length >= 8 && u[4] == 0x66 && u[5] == 0x74 && u[6] == 0x79 && u[7] == 0x70) return "m4a";
+
+        return null;
     }
 }
