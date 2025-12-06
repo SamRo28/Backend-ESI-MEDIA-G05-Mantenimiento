@@ -6,6 +6,10 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,8 @@ import com.example.usersbe.exceptions.NotAnAdminException;
 import com.example.usersbe.exceptions.SuperAdminProtectionException;
 import com.example.usersbe.exceptions.UserDeletionNotAllowedException;
 import com.example.usersbe.exceptions.UserNotFoundException;
+import com.example.usersbe.exceptions.ValidationException;
+import com.example.usersbe.model.Alert;
 import com.example.usersbe.model.User;
 
 import jakarta.mail.MessagingException;
@@ -76,18 +82,30 @@ public class UserService {
                           User.Role role,
                           String descripcion, String especialidad, User.TipoContenido tipoContenido,
                           String departamento,
-                          String mfaPreferred) {
+                          String mfaPreferred,
+                          List<String> misGustos) {
 
         final String emailN = normalizeEmail(email);
 
         User user = buildUser(
                 nombre, apellidos, alias, emailN, fechaNac, pwd, vip, foto, role,
-                descripcion, especialidad, tipoContenido, departamento
+                descripcion, especialidad, tipoContenido, departamento, misGustos
         );
 
         applyMfaPreference(user, mfaPreferred);
 
         userDao.save(user);
+    }
+
+    // Compatibilidad con firmas previas sin misGustos ni mfaPreferred explícito
+    public void registrar(String nombre, String apellidos, String alias, String email,
+                          String fechaNac, String pwd, boolean vip, String foto,
+                          User.Role role,
+                          String descripcion, String especialidad, User.TipoContenido tipoContenido,
+                          String departamento,
+                          String mfaPreferred) {
+        registrar(nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
+                descripcion, especialidad, tipoContenido, departamento, mfaPreferred, null);
     }
 
     public void registrar(String nombre, String apellidos, String alias, String email,
@@ -96,15 +114,25 @@ public class UserService {
                           String descripcion, String especialidad, User.TipoContenido tipoContenido,
                           String departamento) {
         registrar(nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
-                  descripcion, especialidad, tipoContenido, departamento, null);
+                descripcion, especialidad, tipoContenido, departamento, null, null);
     }
 
+    // Firma anterior sin departamento ni mfaPreferred ni misGustos (tests legacy)
     public void registrar(String nombre, String apellidos, String alias, String email,
                           String fechaNac, String pwd, boolean vip, String foto,
                           User.Role role,
                           String descripcion, String especialidad, User.TipoContenido tipoContenido) {
         registrar(nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
-                  descripcion, especialidad, tipoContenido, null, null);
+                descripcion, especialidad, tipoContenido, null, null, null);
+    }
+
+    public void registrar(String nombre, String apellidos, String alias, String email,
+                          String fechaNac, String pwd, boolean vip, String foto,
+                          User.Role role,
+                          String descripcion, String especialidad, User.TipoContenido tipoContenido,
+                          String departamento) {
+        registrar(nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
+                descripcion, especialidad, tipoContenido, departamento, null, null);
     }
 
     public boolean isEmailAvailable(String emailNormalizado) {
@@ -117,7 +145,8 @@ public class UserService {
                            String fechaNac, String pwd, boolean vip, String foto,
                            User.Role role,
                            String descripcion, String especialidad, User.TipoContenido tipoContenido,
-                           String departamento) {
+                           String departamento,
+                           List<String> misGustos) {
 
         User user = new User();
         user.setNombre(nombre != null ? nombre.trim() : null);
@@ -139,6 +168,16 @@ public class UserService {
 
         if (role == User.Role.ADMINISTRADOR) {
             user.setDepartamento(departamento != null ? departamento.trim() : null);
+        }
+
+        if (role == User.Role.USUARIO) {
+            List<String> gustos = misGustos == null ? Collections.emptyList()
+                    : misGustos.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+            user.setMisGustos(gustos);
         }
 
         return user;
@@ -332,11 +371,44 @@ public class UserService {
     }
 
     public User getUserByEmail(String email) {
-        User user = userDao.findByEmail(email);
+        User user = userDao.findByEmail(normalizeEmail(email));
         if (user == null) {
             throw new UserNotFoundException(USER_NOT_FOUND);
         }
         return user;
+    }
+
+    public List<Alert> listarAlertas(String email) {
+        User u = getUserByEmail(email);
+        return u.getAlertInbox();
+    }
+
+    public Alert agregarAlertaAUsuario(String email, Alert alerta) {
+        if (alerta == null) {
+            throw new ValidationException("La alerta no puede ser nula");
+        }
+        User u = getUserByEmail(email);
+        if (alerta.getId() == null || alerta.getId().isBlank()) {
+            alerta.setId(UUID.randomUUID().toString());
+        }
+        if (alerta.getCreadaEn() == null) {
+            alerta.setCreadaEn(LocalDateTime.now());
+        }
+        u.addAlert(alerta);
+        userDao.save(u);
+        return alerta;
+    }
+
+    public void eliminarAlertaUsuario(String email, String alertaId) {
+        if (alertaId == null || alertaId.trim().isEmpty()) {
+            throw new ValidationException("El id de la alerta es obligatorio");
+        }
+        User u = getUserByEmail(email);
+        boolean removed = u.removeAlertById(alertaId.trim());
+        if (!removed) {
+            throw new ValidationException("La alerta indicada no existe para el usuario");
+        }
+        userDao.save(u);
     }
 
     public User actualizarCreador(String id, String alias, String nombre,
@@ -508,7 +580,8 @@ public class UserService {
                 req.getFoto(),
                 User.Role.ADMINISTRADOR,
                 null, null, null,
-                req.getDepartamento()
+                req.getDepartamento(),
+                null
         );
         userDao.save(user);
         return user;
@@ -545,7 +618,8 @@ public class UserService {
                               String apellidos,
                               String alias,
                               String foto,
-                              Boolean vip) {
+                              Boolean vip,
+                              java.util.List<String> misGustos) {
 
         User u = getUserByEmail(email);
         if (u.isBlocked()) throw new ForbiddenException("Usuario bloqueado");
@@ -555,8 +629,21 @@ public class UserService {
         if (alias != null) u.setAlias(alias.trim());
         if (foto != null) u.setFoto(foto);
         if (vip != null) u.setVip(vip);
+        if (misGustos != null) {
+            u.setMisGustos(misGustos);
+        }
 
         return userDao.save(u);
+    }
+
+    // Firma anterior sin misGustos
+    public User updateProfile(String email,
+                              String nombre,
+                              String apellidos,
+                              String alias,
+                              String foto,
+                              Boolean vip) {
+        return updateProfile(email, nombre, apellidos, alias, foto, vip, null);
     }
 
     public void darDeBajaUsuario(String email) {

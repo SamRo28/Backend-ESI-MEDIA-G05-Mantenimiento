@@ -270,6 +270,15 @@ public class ContenidoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
+  
+    @GetMapping("/MiValoracion/{id}")
+    public ResponseEntity<Double> miValoracion(@PathVariable String id,
+            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
+        String email = resolveEmail(xUserEmail);
+        Double v = contenidoService.getMyRating(id, email);
+        if (v == null) return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(v);
+    }
 
     @PostMapping(path = "/{id}/favorito", consumes = MediaType.ALL_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Void> addFavorito(
