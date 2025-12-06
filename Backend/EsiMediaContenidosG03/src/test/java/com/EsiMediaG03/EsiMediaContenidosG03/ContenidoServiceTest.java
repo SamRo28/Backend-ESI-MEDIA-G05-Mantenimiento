@@ -1,9 +1,11 @@
 package com.EsiMediaG03.EsiMediaContenidosG03;
 
 import com.EsiMediaG03.dao.ContenidoDAO;
+import com.EsiMediaG03.dao.ListaPublicaDAO;
 import com.EsiMediaG03.exceptions.ContenidoAddException;
 import com.EsiMediaG03.model.Contenido;
 import com.EsiMediaG03.services.ContenidoService;
+import com.EsiMediaG03.services.ExpiringContentAlertService;
 import org.bson.Document;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +37,12 @@ class ContenidoServiceTest {
 
     @Mock
     MongoTemplate mongoTemplate;
+
+    @Mock
+    ListaPublicaDAO listaPublicaDAO;
+
+    @Mock
+    ExpiringContentAlertService alertService;
 
     @InjectMocks
     ContenidoService service;

@@ -99,4 +99,74 @@ public class ExpiringContentAlertService {
         d.put("disponibleHasta", c.getDisponibleHasta());
         return d;
     }
+
+    /**
+     * Genera alertas de tipo NEW_CONTENT para un contenido recién creado.
+     * Se envía a todos los usuarios elegibles (respetando VIP y restricción de edad).
+     */
+    public int generateNewContentAlert(Contenido c) {
+        if (c == null || c.getId() == null) {
+            log.warn("Contenido nulo o sin ID, no se generan alertas");
+            return 0;
+        }
+
+        // Solo notificar contenido visible
+        if (!c.isVisible()) {
+            log.info("Contenido {} no es visible, no se generan alertas NEW_CONTENT", c.getId());
+            return 0;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int alertsCreated = 0;
+
+        try {
+            Document alertDoc = buildNewContentAlertDocument(c, now);
+
+            Query usersQ = new Query();
+            usersQ.addCriteria(Criteria.where("role").is("USUARIO"));
+
+            // Si el contenido es VIP, solo notificar a usuarios VIP
+            if (c.isVip()) {
+                usersQ.addCriteria(Criteria.where("vip").is(true));
+            }
+
+            // Si tiene restricción de edad, filtrar por fecha de nacimiento
+            if (c.getRestringidoEdad() > 0) {
+                LocalDate cutoff = LocalDate.now().minusYears(c.getRestringidoEdad());
+                usersQ.addCriteria(Criteria.where("fechaNac").lte(cutoff));
+            }
+
+            Update u = new Update().push("alertInbox", alertDoc);
+            UpdateResult res = mongoTemplate.updateMulti(usersQ, u, "users");
+            long modified = (res != null) ? res.getModifiedCount() : 0L;
+            log.info("Nuevo contenido {}: alertas NEW_CONTENT añadidas a {} usuarios", c.getId(), modified);
+            alertsCreated = (int) modified;
+
+            // Marcar el contenido como notificado para no repetir
+            Query cq = new Query(Criteria.where("_id").is(c.getId()));
+            Update cu = new Update().set("alertNuevoContenidoSentAt", now);
+            mongoTemplate.updateFirst(cq, cu, Contenido.class);
+
+        } catch (Exception ex) {
+            log.error("Error creando alertas NEW_CONTENT para contenido {}: {}", c.getId(), ex.getMessage(), ex);
+        }
+
+        return alertsCreated;
+    }
+
+    private Document buildNewContentAlertDocument(Contenido c, LocalDateTime now) {
+        Document d = new Document();
+        d.put("id", UUID.randomUUID().toString());
+        d.put("type", "NEW_CONTENT");
+        d.put("contenidoId", c.getId());
+        d.put("tituloContenido", c.getTitulo());
+        String tipoStr = c.getTipo() != null ? c.getTipo().toString().toLowerCase() : "contenido";
+        String mensaje = String.format("¡Nuevo %s disponible: '%s'!", tipoStr, c.getTitulo());
+        d.put("mensaje", mensaje);
+        d.put("vipOnly", c.isVip());
+        d.put("minEdad", c.getRestringidoEdad());
+        d.put("creadaEn", now);
+        d.put("disponibleHasta", c.getDisponibleHasta());
+        return d;
+    }
 }

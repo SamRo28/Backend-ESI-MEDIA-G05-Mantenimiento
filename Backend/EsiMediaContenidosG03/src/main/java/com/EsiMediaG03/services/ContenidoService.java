@@ -43,12 +43,19 @@ import com.EsiMediaG03.exceptions.StreamingTargetException;
 import com.EsiMediaG03.exceptions.StreamingTargetResolutionException;
 import com.EsiMediaG03.model.Contenido;
 import com.EsiMediaG03.model.ListaPublica;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class ContenidoService {
+
+    private static final Logger log = LoggerFactory.getLogger(ContenidoService.class);
 
     private final ContenidoDAO contenidoDAO;
     private final MongoTemplate mongoTemplate;
     private final ListaPublicaDAO listaPublicaDAO;
+    private final ExpiringContentAlertService alertService;
     
     @Value("${audio.storage.path}")
     private String audioStoragePath;
@@ -71,20 +78,35 @@ public class ContenidoService {
     private static final String MSG_ERROR_ANADIR = "Error al añadir contenido: ";
 
 
-    public ContenidoService(ContenidoDAO contenidoDAO, MongoTemplate mongoTemplate, ListaPublicaDAO listaPublicaDAO) {
+    public ContenidoService(ContenidoDAO contenidoDAO, MongoTemplate mongoTemplate, 
+                            ListaPublicaDAO listaPublicaDAO, ExpiringContentAlertService alertService) {
         this.contenidoDAO = contenidoDAO;
         this.mongoTemplate = mongoTemplate;
         this.listaPublicaDAO = listaPublicaDAO;
+        this.alertService = alertService;
     }
 
     public Contenido anadirContenido(Contenido contenido) throws ContenidoAddException {
-    try {
-        validarcontenido(contenido);
-    } catch (ContenidoValidationException | IllegalArgumentException ex) {
-        throw new ContenidoAddException(MSG_ERROR_ANADIR + ex.getMessage());
+        try {
+            validarcontenido(contenido);
+        } catch (ContenidoValidationException | IllegalArgumentException ex) {
+            throw new ContenidoAddException(MSG_ERROR_ANADIR + ex.getMessage());
+        }
+        Contenido saved = contenidoDAO.save(contenido);
+        
+        // Generar alertas de nuevo contenido para usuarios elegibles
+        try {
+            int alertCount = alertService.generateNewContentAlert(saved);
+            log.info("Contenido '{}' creado. Alertas NEW_CONTENT enviadas a {} usuarios", 
+                    saved.getTitulo(), alertCount);
+        } catch (Exception ex) {
+            log.error("Error al generar alertas para nuevo contenido '{}': {}", 
+                    saved.getId(), ex.getMessage());
+            // No lanzamos excepción para no afectar la creación del contenido
+        }
+        
+        return saved;
     }
-    return contenidoDAO.save(contenido);
-}
 
 
     public List<Contenido> listarContenidos() {
