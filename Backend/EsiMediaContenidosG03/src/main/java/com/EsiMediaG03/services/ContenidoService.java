@@ -299,15 +299,14 @@ public class ContenidoService {
             throw new ContenidoValidationException("El tipo de contenido debe ser AUDIO o VIDEO.");
         }
         if (contenido.getTipo() == Contenido.Tipo.AUDIO) {
-            validarFicheroAudio(contenido);
+            // Permitimos crear un contenido AUDIO sin que todavía exista el fichero en disco
+            // (flujo: crear contenido -> subir fichero). Solo prohibimos que se indiquen
+            // ambas fuentes a la vez (urlAudio y ficheroAudio).
+            if (hasText(contenido.getUrlAudio()) && hasText(contenido.getFicheroAudio())) {
+                throw new ContenidoValidationException("Para AUDIO, indica solo una fuente: urlAudio (remota) o ficheroAudio (local).");
+            }
         } else if (contenido.getTipo() == Contenido.Tipo.VIDEO) {
             validarVideo(contenido);
-        }
-    }
-
-    private void validarFicheroAudio(Contenido contenido) {
-        if (contenido.getFicheroAudio() == null || contenido.getFicheroAudio().isBlank()) {
-            throw new ContenidoValidationException("Debe indicar la ruta del fichero de audio.");
         }
     }
 
