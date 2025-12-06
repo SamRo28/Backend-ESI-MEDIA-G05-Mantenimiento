@@ -53,6 +53,11 @@ public class User {
     private String descripcion;
     private String especialidad;
     private TipoContenido tipoContenido;
+    /**
+     * Lista de tags que representan los gustos/preferencias del usuario.
+     * Se mantiene vacía si el usuario no ha elegido ninguna.
+     */
+    private List<String> misGustos = new ArrayList<>();
 
     @Transient
     private String confirmarPwd;
@@ -160,6 +165,13 @@ public class User {
 
     public TipoContenido getTipoContenido() { return tipoContenido; }
     public void setTipoContenido(TipoContenido tipoContenido) { this.tipoContenido = tipoContenido; }
+    public List<String> getMisGustos() {
+        if (misGustos == null) misGustos = new ArrayList<>();
+        return misGustos;
+    }
+    public void setMisGustos(List<String> misGustos) {
+        this.misGustos = misGustos != null ? misGustos : new ArrayList<>();
+    }
     public String getAdminApprovalToken() { return adminApprovalToken; }
     public void setAdminApprovalToken(String adminApprovalToken) { this.adminApprovalToken = adminApprovalToken; }
     public LocalDateTime getAdminApprovalExpires() { return adminApprovalExpires; }

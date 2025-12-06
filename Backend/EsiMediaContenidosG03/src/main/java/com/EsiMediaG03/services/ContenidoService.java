@@ -3,6 +3,9 @@ package com.EsiMediaG03.services;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.io.InputStream;
+import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -22,6 +25,8 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -51,6 +56,9 @@ public class ContenidoService {
     private final MongoTemplate mongoTemplate;
     private final ListaPublicaDAO listaPublicaDAO;
     private final ExpiringContentAlertService alertService;
+    
+    @Value("${audio.storage.path}")
+    private String audioStoragePath;
 
     private static final String VIDEO_MP4 = "video/mp4";
     private static final String CONTENIDO_NO_ENCONTRADO = "Contenido no encontrado: ";
@@ -178,6 +186,7 @@ public class ContenidoService {
 
     private static boolean hasText(String s){ return s != null && !s.isBlank(); }
     private static final String AUDIO_DEFAULT = "audio/mpeg";
+    private static final java.util.List<String> ALLOWED_MIME_TYPES = java.util.List.of("audio/mpeg", "audio/mp3");
 
     private final TipoOps audioOps = new TipoOps() {
         @Override public void patch(Contenido actual, ModificarContenidoRequest c) {
@@ -326,15 +335,14 @@ public class ContenidoService {
             throw new ContenidoValidationException("El tipo de contenido debe ser AUDIO o VIDEO.");
         }
         if (contenido.getTipo() == Contenido.Tipo.AUDIO) {
-            validarFicheroAudio(contenido);
+            // Permitimos crear un contenido AUDIO sin que todavía exista el fichero en disco
+            // (flujo: crear contenido -> subir fichero). Solo prohibimos que se indiquen
+            // ambas fuentes a la vez (urlAudio y ficheroAudio).
+            if (hasText(contenido.getUrlAudio()) && hasText(contenido.getFicheroAudio())) {
+                throw new ContenidoValidationException("Para AUDIO, indica solo una fuente: urlAudio (remota) o ficheroAudio (local).");
+            }
         } else if (contenido.getTipo() == Contenido.Tipo.VIDEO) {
             validarVideo(contenido);
-        }
-    }
-
-    private void validarFicheroAudio(Contenido contenido) {
-        if (contenido.getFicheroAudio() == null || contenido.getFicheroAudio().isBlank()) {
-            throw new ContenidoValidationException("Debe indicar la ruta del fichero de audio.");
         }
     }
 
@@ -598,5 +606,84 @@ public class ContenidoService {
                     return m;
                 })
                 .toList();
+    }
+
+    /**
+     * Guarda un archivo de audio en disco y actualiza el campo `ficheroAudio` del contenido.
+     * La ruta almacenada será relativa a la carpeta configurada en `audio.storage.path`.
+     */
+    public Contenido storeAudioFile(String contenidoId, MultipartFile file, String userEmail) throws IOException {
+        if (userEmail == null || userEmail.isBlank()) {
+            throw new AccessDeniedException("Debes iniciar sesión para subir archivos");
+        }
+
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Archivo vacío");
+        }
+
+        String mime = file.getContentType();
+        if (mime == null || ALLOWED_MIME_TYPES.stream().noneMatch(m -> m.equalsIgnoreCase(mime))) {
+            throw new IllegalArgumentException("Tipo MIME no soportado: " + mime);
+        }
+
+        String original = file.getOriginalFilename();
+        if (original == null || original.trim().isEmpty()) {
+            throw new IllegalArgumentException("El archivo debe tener un nombre válido");
+        }
+        if (!original.toLowerCase().endsWith(".mp3")) {
+            throw new IllegalArgumentException("Extensión no válida: se requiere .mp3");
+        }
+
+        // Validar magic bytes (primeros bytes) y detectar formato
+        byte[] head = file.getInputStream().readNBytes(12);
+        String formato = detectarFormatoPorMagicBytes(head);
+        if (!"mp3".equals(formato)) {
+            throw new IllegalArgumentException("El archivo no parece ser un MP3 válido");
+        }
+
+        Contenido c = contenidoDAO.findById(contenidoId)
+                .orElseThrow(() -> new ContenidoException(CONTENIDO_NO_ENCONTRADO + " " + contenidoId));
+
+        // Crear carpeta de almacenamiento: la ruta debe estar configurada en application.properties
+        if (this.audioStoragePath == null || this.audioStoragePath.isBlank()) {
+            throw new IllegalStateException("Propiedad 'audio.storage.path' no configurada. Define 'audio.storage.path' en application.properties");
+        }
+        Path storage = Path.of(this.audioStoragePath).toAbsolutePath().normalize();
+        Files.createDirectories(storage);
+
+        String filename = UUID.randomUUID().toString() + ".mp3";
+        Path target = storage.resolve(filename);
+
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // Guardar ruta relativa (carpeta/archivo)
+        String relative = storage.getFileName() != null ? storage.getFileName().toString() + "/" + filename : filename;
+        c.setFicheroAudio(relative);
+        return contenidoDAO.save(c);
+    }
+
+    private String detectarFormatoPorMagicBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) return null;
+        int[] u = new int[bytes.length];
+        for (int i = 0; i < bytes.length; i++) u[i] = bytes[i] & 0xFF;
+
+        // MP3: ID3v2
+        if (u[0] == 0x49 && u[1] == 0x44 && u[2] == 0x33) return "mp3";
+        // MP3: frame sync
+        if (u[0] == 0xFF && (u[1] & 0xE0) == 0xE0) return "mp3";
+
+        // WAV: 'RIFF' .... 'WAVE'
+        if (u.length >= 12 && u[0] == 0x52 && u[1] == 0x49 && u[2] == 0x46 && u[3] == 0x46
+                && u[8] == 0x57 && u[9] == 0x41 && u[10] == 0x56 && u[11] == 0x45) return "wav";
+
+        // OGG: 'OggS'
+        if (u[0] == 0x4F && u[1] == 0x67 && u[2] == 0x67 && u[3] == 0x53) return "ogg";
+
+        // M4A/AAC: 'ftyp' at 4-7
+        if (u.length >= 8 && u[4] == 0x66 && u[5] == 0x74 && u[6] == 0x79 && u[7] == 0x70) return "m4a";
+
+        return null;
     }
 }
