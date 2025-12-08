@@ -56,6 +56,7 @@ public class ContenidoService {
     private final MongoTemplate mongoTemplate;
     private final ListaPublicaDAO listaPublicaDAO;
     private final ExpiringContentAlertService alertService;
+    private final UserInterestsAlertService interestsAlertService;
     
     @Value("${audio.storage.path}")
     private String audioStoragePath;
@@ -79,11 +80,13 @@ public class ContenidoService {
 
 
     public ContenidoService(ContenidoDAO contenidoDAO, MongoTemplate mongoTemplate, 
-                            ListaPublicaDAO listaPublicaDAO, ExpiringContentAlertService alertService) {
+                            ListaPublicaDAO listaPublicaDAO, ExpiringContentAlertService alertService,
+                            UserInterestsAlertService interestsAlertService) {
         this.contenidoDAO = contenidoDAO;
         this.mongoTemplate = mongoTemplate;
         this.listaPublicaDAO = listaPublicaDAO;
         this.alertService = alertService;
+        this.interestsAlertService = interestsAlertService;
     }
 
     public Contenido anadirContenido(Contenido contenido) throws ContenidoAddException {
@@ -101,6 +104,17 @@ public class ContenidoService {
                     saved.getTitulo(), alertCount);
         } catch (Exception ex) {
             log.error("Error al generar alertas para nuevo contenido '{}': {}", 
+                    saved.getId(), ex.getMessage());
+            // No lanzamos excepción para no afectar la creación del contenido
+        }
+        
+        // Generar alertas de contenido por gustos del Usuario
+        try {
+            int interestAlerts = interestsAlertService.generateInterestBasedAlert(saved);
+            log.info("Contenido '{}': {} alertas CONTENT_MATCHES_INTERESTS generadas", 
+                    saved.getTitulo(), interestAlerts);
+        } catch (Exception ex) {
+            log.error("Error al generar alertas de interés para contenido '{}': {}", 
                     saved.getId(), ex.getMessage());
             // No lanzamos excepción para no afectar la creación del contenido
         }

@@ -11,7 +11,8 @@ public class Alert {
 
     public enum AlertType {
         NEW_CONTENT,
-        CONTENT_EXPIRING
+        CONTENT_EXPIRING,
+        CONTENT_MATCHES_INTERESTS
     }
 
     private String id = UUID.randomUUID().toString();
