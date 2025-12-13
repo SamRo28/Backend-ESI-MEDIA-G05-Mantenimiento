@@ -406,7 +406,9 @@ public class UserService {
         User u = getUserByEmail(email);
         boolean removed = u.removeAlertById(alertaId.trim());
         if (!removed) {
-            throw new ValidationException("La alerta indicada no existe para el usuario");
+            // Si no existe, no consideramos error para evitar bloquear al usuario en caso de desincronizacion
+            userDao.save(u);
+            return;
         }
         userDao.save(u);
     }
