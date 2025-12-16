@@ -4,11 +4,11 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
-import java.util.Collections;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -108,14 +108,6 @@ public class UserService {
                 descripcion, especialidad, tipoContenido, departamento, mfaPreferred, null);
     }
 
-    public void registrar(String nombre, String apellidos, String alias, String email,
-                          String fechaNac, String pwd, boolean vip, String foto,
-                          User.Role role,
-                          String descripcion, String especialidad, User.TipoContenido tipoContenido,
-                          String departamento) {
-        registrar(nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
-                descripcion, especialidad, tipoContenido, departamento, null, null);
-    }
 
     // Firma anterior sin departamento ni mfaPreferred ni misGustos (tests legacy)
     public void registrar(String nombre, String apellidos, String alias, String email,
