@@ -23,6 +23,7 @@ public class ExpiringContentAlertService {
 
     private final MongoTemplate mongoTemplate;
     private static final Logger log = LoggerFactory.getLogger(ExpiringContentAlertService.class);
+    private static final String FIELD_DISPONIBLE_HASTA = "disponibleHasta";
 
     public ExpiringContentAlertService(MongoTemplate mongoTemplate) {
         this.mongoTemplate = mongoTemplate;
@@ -42,7 +43,7 @@ public class ExpiringContentAlertService {
         LocalDateTime limit = now.plusDays(7);
 
         Query q = new Query();
-        q.addCriteria(Criteria.where("disponibleHasta").gt(now).lte(limit));
+        q.addCriteria(Criteria.where(FIELD_DISPONIBLE_HASTA).gt(now).lte(limit));
         q.addCriteria(Criteria.where("alertCaducidadSentAt").is(null));
         q.addCriteria(Criteria.where("visible").is(true));
 
@@ -96,13 +97,14 @@ public class ExpiringContentAlertService {
         d.put("vipOnly", c.isVip());
         d.put("minEdad", c.getRestringidoEdad());
         d.put("creadaEn", now);
-        d.put("disponibleHasta", c.getDisponibleHasta());
+        d.put(FIELD_DISPONIBLE_HASTA, c.getDisponibleHasta());
         return d;
     }
 
     /**
      * Genera alertas de tipo NEW_CONTENT para un contenido recién creado.
-     * Se envía a todos los usuarios elegibles (respetando VIP y restricción de edad).
+     * Se envía a todos los usuarios elegibles (respetando VIP y restricción de
+     * edad).
      */
     public int generateNewContentAlert(Contenido c) {
         if (c == null || c.getId() == null) {
@@ -166,7 +168,7 @@ public class ExpiringContentAlertService {
         d.put("vipOnly", c.isVip());
         d.put("minEdad", c.getRestringidoEdad());
         d.put("creadaEn", now);
-        d.put("disponibleHasta", c.getDisponibleHasta());
+        d.put(FIELD_DISPONIBLE_HASTA, c.getDisponibleHasta());
         return d;
     }
 }

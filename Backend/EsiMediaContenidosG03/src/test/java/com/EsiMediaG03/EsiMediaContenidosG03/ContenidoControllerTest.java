@@ -28,7 +28,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT) 
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ContenidoControllerTest {
 
     @Mock
@@ -52,21 +52,9 @@ class ContenidoControllerTest {
         Files.deleteIfExists(tempFile);
     }
 
-    private StreamingTarget mockFileTarget() {
-        StreamingTarget t = mock(StreamingTarget.class, withSettings().lenient());
-        when(t.isExternalRedirect()).thenReturn(false);
-        when(t.externalUrl()).thenReturn(null);
-        when(t.path()).thenReturn(tempFile);
-        when(t.length()).thenReturn((long) data.length);
-        when(t.mimeType()).thenReturn("application/octet-stream");
-        return t;
-    }
+    // unused mockFileTarget method removed
 
-    private static byte[] readAll(InputStream is) throws Exception {
-        return is.readAllBytes();
-    }
-
-   
+    // unused readAll method removed
 
     @Test
     @DisplayName("PUT /ModificarContenido/{id} -> 200 OK y llamada al servicio con tipo correcto")
@@ -92,22 +80,23 @@ class ContenidoControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
         verify(contenidoService).eliminarContenido("c1", Contenido.Tipo.AUDIO);
     }
-        @Test
+
+    @Test
     void testValorarContenido() {
-        Map<String,Object> map = Map.of("score", 5);
+        Map<String, Object> map = Map.of("score", 5);
         when(contenidoService.rateContenido(anyString(), anyString(), anyDouble())).thenReturn(map);
 
-        ResponseEntity<Map<String,Object>> resp = controller.valorarContenido("id", 5.0, "user@mail.com");
+        ResponseEntity<Map<String, Object>> resp = controller.valorarContenido("id", 5.0, "user@mail.com");
         assertEquals(200, resp.getStatusCodeValue());
         assertEquals(map, resp.getBody());
     }
 
     @Test
     void testRatingContenido() {
-        Map<String,Object> map = Map.of("avg", 4.5);
+        Map<String, Object> map = Map.of("avg", 4.5);
         when(contenidoService.ratingResumen(anyString())).thenReturn(map);
 
-        ResponseEntity<Map<String,Object>> resp = controller.ratingContenido("id");
+        ResponseEntity<Map<String, Object>> resp = controller.ratingContenido("id");
         assertEquals(200, resp.getStatusCodeValue());
         assertEquals(map, resp.getBody());
     }
@@ -153,8 +142,6 @@ class ContenidoControllerTest {
         assertEquals("header@mail.com", email);
     }
 
-
-   
     @Test
     void testStreamExternalRedirect() throws Exception {
         StreamingTarget target = mock(StreamingTarget.class);
