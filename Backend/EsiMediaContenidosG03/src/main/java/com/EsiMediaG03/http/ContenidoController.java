@@ -38,7 +38,9 @@ import com.EsiMediaG03.services.ContenidoService;
 @CrossOrigin(origins = "http://localhost:4200")
 public class ContenidoController {
 
+    private static final String ERROR_KEY = "error";
     private static final long DEFAULT_CHUNK_SIZE = 1024L * 1024L;
+
     private final ContenidoService contenidoService;
 
     public ContenidoController(ContenidoService contenidoService) {
@@ -61,12 +63,13 @@ public class ContenidoController {
     public ResponseEntity<Object> stream(
             @PathVariable String id,
             @RequestHeader HttpHeaders headers,
-            @RequestHeader(value="X-User-Role", required=false) String userRole,
-            @RequestHeader(value="X-User-Email", required=false) String userEmail,
-            @RequestHeader(value="X-User-Vip", required=false) Boolean userVip,
-            @RequestHeader(value="X-User-Birthdate", required=false) String userBirthdateIso,
-            @RequestHeader(value="X-User-Age", required=false) Integer userAge,
-            @org.springframework.web.bind.annotation.RequestParam(value = "meta", required = false) Boolean meta // <— NUEVO
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            @RequestHeader(value = "X-User-Vip", required = false) Boolean userVip,
+            @RequestHeader(value = "X-User-Birthdate", required = false) String userBirthdateIso,
+            @RequestHeader(value = "X-User-Age", required = false) Integer userAge,
+            @org.springframework.web.bind.annotation.RequestParam(value = "meta", required = false) Boolean meta // <—
+                                                                                                                 // NUEVO
     ) throws Exception {
         Integer age = resolveAge(userBirthdateIso, userAge);
 
@@ -80,17 +83,14 @@ public class ContenidoController {
                 return ResponseEntity.ok(java.util.Map.of(
                         "kind", "external",
                         "url", target.externalUrl(),
-                        "mime", target.mimeType() != null ? target.mimeType() : "text/html"
-                ));
+                        "mime", target.mimeType() != null ? target.mimeType() : "text/html"));
             } else {
                 return ResponseEntity.ok(java.util.Map.of(
                         "kind", "local",
                         "mime", target.mimeType(),
-                        "length", target.length()
-                ));
+                        "length", target.length()));
             }
         }
-    
 
         if (target.isExternalRedirect()) {
             return ResponseEntity.status(HttpStatus.FOUND)
@@ -145,9 +145,9 @@ public class ContenidoController {
 
     @RequestMapping(value = "/ReproducirContenido/{id}", method = RequestMethod.HEAD)
     public ResponseEntity<Void> head(@PathVariable String id,
-                                 @RequestHeader(value = "X-User-Vip", required = false) Boolean userVip,
-                                 @RequestHeader(value = "X-User-Birthdate", required = false) String userBirthdateIso,
-                                 @RequestHeader(value = "X-User-Age", required = false) Integer userAge) throws Exception {
+            @RequestHeader(value = "X-User-Vip", required = false) Boolean userVip,
+            @RequestHeader(value = "X-User-Birthdate", required = false) String userBirthdateIso,
+            @RequestHeader(value = "X-User-Age", required = false) Integer userAge) throws Exception {
         Integer age = resolveAge(userBirthdateIso, userAge);
         StreamingTarget target = contenidoService.resolveStreamingTarget(id, userVip, age);
         HttpHeaders h = new HttpHeaders();
@@ -173,12 +173,10 @@ public class ContenidoController {
             @PathVariable String id,
             @RequestBody ModificarContenidoRequest cambios,
             @RequestHeader(value = "X-User-Email", required = false) String userEmail,
-            @RequestHeader("X-Creator-Tipo") String creatorTipo
-    ) throws Throwable {
+            @RequestHeader("X-Creator-Tipo") String creatorTipo) throws Throwable {
         Contenido.Tipo requesterTipo = Contenido.Tipo.valueOf(creatorTipo.toUpperCase());
         Contenido actualizado = contenidoService.modificarContenido(
-                id, cambios, requesterTipo
-        );
+                id, cambios, requesterTipo);
         return ResponseEntity.ok(actualizado);
     }
 
@@ -186,8 +184,7 @@ public class ContenidoController {
     public ResponseEntity<Void> eliminarContenido(
             @PathVariable String id,
             @RequestHeader(value = "X-User-Email", required = false) String userEmail,
-            @RequestHeader("X-Creator-Tipo") String creatorTipo
-    ) {
+            @RequestHeader("X-Creator-Tipo") String creatorTipo) {
         Contenido.Tipo requesterTipo = Contenido.Tipo.valueOf(creatorTipo.toUpperCase());
         contenidoService.eliminarContenido(id, requesterTipo);
         return ResponseEntity.noContent().build();
@@ -195,10 +192,12 @@ public class ContenidoController {
 
     public MediaType resolveMediaType(String mimeFromModel, Path file) {
         try {
-            if (StringUtils.hasText(mimeFromModel)) return MediaType.parseMediaType(mimeFromModel);
+            if (StringUtils.hasText(mimeFromModel))
+                return MediaType.parseMediaType(mimeFromModel);
             if (file != null) {
                 String probe = Files.probeContentType(file);
-                if (probe != null) return MediaType.parseMediaType(probe);
+                if (probe != null)
+                    return MediaType.parseMediaType(probe);
             }
         } catch (Exception ignored) {
             // No se ha podido determinar el tipo; se devolverá APPLICATION_OCTET_STREAM
@@ -209,28 +208,39 @@ public class ContenidoController {
 
     static class LimitedInputStream extends java.io.FilterInputStream {
         private long remaining;
+
         protected LimitedInputStream(InputStream in, long limit) {
             super(in);
             this.remaining = limit;
         }
-        @Override public int read() throws java.io.IOException {
-            if (remaining <= 0) return -1;
+
+        @Override
+        public int read() throws java.io.IOException {
+            if (remaining <= 0)
+                return -1;
             int b = super.read();
-            if (b != -1) remaining--;
+            if (b != -1)
+                remaining--;
             return b;
         }
-        @Override public int read(byte[] b, int off, int len) throws java.io.IOException {
-            if (remaining <= 0) return -1;
-            len = (int)Math.min(len, remaining);
+
+        @Override
+        public int read(byte[] b, int off, int len) throws java.io.IOException {
+            if (remaining <= 0)
+                return -1;
+            len = (int) Math.min(len, remaining);
             int read = super.read(b, off, len);
-            if (read > 0) remaining -= read;
+            if (read > 0)
+                remaining -= read;
             return read;
         }
     }
 
     public Integer resolveAge(String birthIso, Integer ageDirect) {
-        if (ageDirect != null && ageDirect > 0) return ageDirect;
-        if (birthIso == null || birthIso.isBlank()) return null;
+        if (ageDirect != null && ageDirect > 0)
+            return ageDirect;
+        if (birthIso == null || birthIso.isBlank())
+            return null;
         try {
             return com.EsiMediaG03.services.ContenidoService.calcularEdad(java.time.LocalDate.parse(birthIso));
         } catch (Exception e) {
@@ -239,44 +249,44 @@ public class ContenidoController {
     }
 
     @PostMapping("/ValorarContenido/{id}/{score}")
-    public ResponseEntity<Map<String,Object>> valorarContenido(
+    public ResponseEntity<Map<String, Object>> valorarContenido(
             @PathVariable String id,
             @PathVariable double score,
-            @RequestHeader(value="X-User-Email", required=false) String userEmail
-    ) {
-        Map<String,Object> res = contenidoService.rateContenido(id, userEmail, score);
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail) {
+        Map<String, Object> res = contenidoService.rateContenido(id, userEmail, score);
         return ResponseEntity.ok(res);
     }
 
     @GetMapping("/RatingContenido/{id}")
-    public ResponseEntity<Map<String,Object>> ratingContenido(@PathVariable String id) {
-        Map<String,Object> res = contenidoService.ratingResumen(id);
+    public ResponseEntity<Map<String, Object>> ratingContenido(@PathVariable String id) {
+        Map<String, Object> res = contenidoService.ratingResumen(id);
         return ResponseEntity.ok(res);
     }
 
     @PostMapping(path = "/{id}/upload-audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String,Object>> uploadAudio(@PathVariable String id,
-                                                          @RequestPart("file") MultipartFile file,
-                                                          @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
+    public ResponseEntity<Map<String, Object>> uploadAudio(@PathVariable String id,
+            @RequestPart("file") MultipartFile file,
+            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
         String email = resolveEmail(xUserEmail);
         try {
             var updated = contenidoService.storeAudioFile(id, file, email);
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("fichero", updated.getFicheroAudio()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of(ERROR_KEY, e.getMessage()));
         } catch (org.springframework.security.access.AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(ERROR_KEY, e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(ERROR_KEY, e.getMessage()));
         }
     }
-  
+
     @GetMapping("/MiValoracion/{id}")
     public ResponseEntity<Double> miValoracion(@PathVariable String id,
             @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
         String email = resolveEmail(xUserEmail);
         Double v = contenidoService.getMyRating(id, email);
-        if (v == null) return ResponseEntity.noContent().build();
+        if (v == null)
+            return ResponseEntity.noContent().build();
         return ResponseEntity.ok(v);
     }
 
@@ -284,8 +294,7 @@ public class ContenidoController {
     public ResponseEntity<Void> addFavorito(
             @PathVariable("id") String contenidoId,
             @RequestHeader(value = "X-User-Email", required = false) String xUserEmail,
-            @RequestHeader(value = "X-User-Role", required = false) String xUserRole
-    ) {
+            @RequestHeader(value = "X-User-Role", required = false) String xUserRole) {
         String email = resolveEmail(xUserEmail);
         contenidoService.addFavorito(contenidoId, email, xUserRole);
 
@@ -295,8 +304,7 @@ public class ContenidoController {
     @DeleteMapping(path = "/{id}/favorito", consumes = MediaType.ALL_VALUE)
     public ResponseEntity<Void> removeFavorito(
             @PathVariable("id") String contenidoId,
-            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail
-    ) {
+            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
         String email = resolveEmail(xUserEmail);
         contenidoService.removeFavorito(contenidoId, email);
         return ResponseEntity.noContent().build();
@@ -304,8 +312,7 @@ public class ContenidoController {
 
     @GetMapping(path = "/favoritos", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<String>> listFavoritos(
-            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail
-    ) {
+            @RequestHeader(value = "X-User-Email", required = false) String xUserEmail) {
         String email = resolveEmail(xUserEmail);
         return ResponseEntity.ok(contenidoService.listFavoritosIds(email));
     }
@@ -314,7 +321,8 @@ public class ContenidoController {
         var ctx = org.springframework.security.core.context.SecurityContextHolder.getContext();
         var auth = ctx != null ? ctx.getAuthentication() : null;
         String scEmail = (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName()))
-                ? auth.getName() : null;
+                ? auth.getName()
+                : null;
         String email = (scEmail != null && !scEmail.isBlank()) ? scEmail : headerEmail;
         if (email == null || email.isBlank()) {
             throw new org.springframework.security.access.AccessDeniedException("Usuario no autenticado");
@@ -327,10 +335,10 @@ public class ContenidoController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole) {
 
         if (userRole == null ||
-            !(userRole.equalsIgnoreCase("ADMINISTRADOR") ||
-              userRole.equalsIgnoreCase("GESTOR_CONTENIDO"))) {
+                !(userRole.equalsIgnoreCase("ADMINISTRADOR") ||
+                        userRole.equalsIgnoreCase("GESTOR_CONTENIDO"))) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "No autorizado: solo Administradores y Gestores."));
+                    .body(Map.of(ERROR_KEY, "No autorizado: solo Administradores y Gestores."));
         }
 
         Map<String, Object> res = contenidoService.estadisticasGlobales();
