@@ -13,6 +13,7 @@ import org.springframework.data.annotation.Transient;
 
 @Document(collection = "users")
 public class User {
+
     public enum Role {
         USUARIO, GESTOR_CONTENIDO, ADMINISTRADOR
     }
@@ -52,6 +53,11 @@ public class User {
     private String descripcion;
     private String especialidad;
     private TipoContenido tipoContenido;
+    /**
+     * Lista de tags que representan los gustos/preferencias del usuario.
+     * Se mantiene vacía si el usuario no ha elegido ninguna.
+     */
+    private List<String> misGustos = new ArrayList<>();
 
     @Transient
     private String confirmarPwd;
@@ -75,6 +81,7 @@ public class User {
     private AdminApprovalStatus adminApprovalStatus = AdminApprovalStatus.NONE;
     private LocalDateTime pwdChangedAt;
     private List<String> pwdHistory = new ArrayList<>();
+    private List<Alert> alertInbox = new ArrayList<>();
     public User() { this.id = UUID.randomUUID().toString(); }
 
     public String getId() { return id; }
@@ -158,6 +165,13 @@ public class User {
 
     public TipoContenido getTipoContenido() { return tipoContenido; }
     public void setTipoContenido(TipoContenido tipoContenido) { this.tipoContenido = tipoContenido; }
+    public List<String> getMisGustos() {
+        if (misGustos == null) misGustos = new ArrayList<>();
+        return misGustos;
+    }
+    public void setMisGustos(List<String> misGustos) {
+        this.misGustos = misGustos != null ? misGustos : new ArrayList<>();
+    }
     public String getAdminApprovalToken() { return adminApprovalToken; }
     public void setAdminApprovalToken(String adminApprovalToken) { this.adminApprovalToken = adminApprovalToken; }
     public LocalDateTime getAdminApprovalExpires() { return adminApprovalExpires; }
@@ -170,4 +184,17 @@ public class User {
     public void setPwdHistory(List<String> pwdHistory) { this.pwdHistory = pwdHistory; }
     public LocalDateTime getPwdChangedAt() { return pwdChangedAt; }
     public void setPwdChangedAt(LocalDateTime pwdChangedAt) { this.pwdChangedAt = pwdChangedAt; }
+    public List<Alert> getAlertInbox() {
+        if (alertInbox == null) alertInbox = new ArrayList<>();
+        return alertInbox;
+    }
+    public void setAlertInbox(List<Alert> alertInbox) { this.alertInbox = alertInbox; }
+    public void addAlert(Alert alert) {
+        if (alert == null) return;
+        getAlertInbox().add(alert);
+    }
+    public boolean removeAlertById(String alertId) {
+        if (alertId == null || alertId.isBlank()) return false;
+        return getAlertInbox().removeIf(a -> alertId.equals(a.getId()));
+    }
 }   

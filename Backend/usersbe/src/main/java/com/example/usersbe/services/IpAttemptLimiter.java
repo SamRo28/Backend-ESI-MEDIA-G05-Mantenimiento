@@ -63,14 +63,13 @@ public class IpAttemptLimiter {
             String line;
             while ((line = br.readLine()) != null) {
                 int sep = line.indexOf('|');
-                if (sep <= 0) {
-                    continue;
-                }
-                long ts = parseTs(line.substring(0, sep));
-                if (ts > 0 && (now - ts) <= windowMs) {
-                    String lineIp = line.substring(sep + 1);
-                    if (ip.equals(lineIp)) {
-                        count++;
+                if (sep > 0) {
+                    long ts = parseTs(line.substring(0, sep));
+                    if (ts > 0 && (now - ts) <= windowMs) {
+                        String lineIp = line.substring(sep + 1);
+                        if (ip.equals(lineIp)) {
+                            count++;
+                        }
                     }
                 }
             }
@@ -90,38 +89,22 @@ public class IpAttemptLimiter {
             return 0L;
         }
         long now = System.currentTimeMillis();
-        long oldestInside = Long.MAX_VALUE;
-        int count = 0;
+        AttemptStats stats = new AttemptStats();
 
         try (BufferedReader br = Files.newBufferedReader(logFile.toPath(), StandardCharsets.UTF_8)) {
             String line;
             while ((line = br.readLine()) != null) {
-                int sep = line.indexOf('|');
-                if (sep <= 0) {
-                    continue;
-                }
-                long ts = parseTs(line.substring(0, sep));
-                if (ts <= 0 || (now - ts) > windowMs) {
-                    continue;
-                }
-                String lineIp = line.substring(sep + 1);
-                if (!ip.equals(lineIp)) {
-                    continue;
-                }
-                count++;
-                if (ts < oldestInside) {
-                    oldestInside = ts;
-                }
+                processLine(line, ip, now, stats);
             }
         } catch (IOException e) {
             log.warn("No se pudo calcular el desbloqueo ({}): {}", logFile.getPath(), e.toString());
             return 0L;
         }
 
-        if (count < maxAttempts) {
+        if (stats.count < maxAttempts) {
             return 0L;
         }
-        long unlockAt = oldestInside + windowMs;
+        long unlockAt = stats.oldestTimestamp + windowMs;
         long seconds = (unlockAt - now + 999) / 1000;
         return Math.max(seconds, 0L);
     }
@@ -136,5 +119,26 @@ public class IpAttemptLimiter {
         } catch (NumberFormatException ex) {
             return -1L;
         }
+    }
+
+    private void processLine(String line, String ip, long now, AttemptStats stats) {
+        int sep = line.indexOf('|');
+        if (sep > 0) {
+            long ts = parseTs(line.substring(0, sep));
+            if (ts > 0 && (now - ts) <= windowMs) {
+                String lineIp = line.substring(sep + 1);
+                if (ip.equals(lineIp)) {
+                    stats.count++;
+                    if (ts < stats.oldestTimestamp) {
+                        stats.oldestTimestamp = ts;
+                    }
+                }
+            }
+        }
+    }
+
+    private static class AttemptStats {
+        int count = 0;
+        long oldestTimestamp = Long.MAX_VALUE;
     }
 }

@@ -70,14 +70,14 @@ class RegisterAndFriendlyDtoTest {
                 .bio("bio")
                 .build();
 
-        assertEquals("id1", dto.id);
-        assertEquals("al", dto.alias);
-        assertEquals("Nombre", dto.nombre);
-        assertEquals("e@mail.com", dto.email);
-        assertTrue(dto.blocked);
-        assertFalse(dto.deleted);
-        assertEquals(now, dto.createdAt);
-        assertEquals("u.png", dto.fotoUrl);
-        assertEquals("bio", dto.bio);
+        assertEquals("id1", dto.getId());
+        assertEquals("al", dto.getAlias());
+        assertEquals("Nombre", dto.getNombre());
+        assertEquals("e@mail.com", dto.getEmail());
+        assertTrue(dto.isBlocked());
+        assertFalse(dto.isDeleted());
+        assertEquals(now, dto.getCreatedAt());
+        assertEquals("u.png", dto.getFotoUrl());
+        assertEquals("bio", dto.getBio());
     }
 }

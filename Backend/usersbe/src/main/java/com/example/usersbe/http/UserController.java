@@ -29,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.usersbe.dto.AdminCreationRequest;
 import com.example.usersbe.exceptions.ForbiddenException;
 import com.example.usersbe.exceptions.ValidationException;
+import com.example.usersbe.model.Alert;
 import com.example.usersbe.model.User;
 import com.example.usersbe.services.UserService;
 
@@ -60,6 +61,7 @@ public class UserController {
     private static final String FIELD_ESPECIALIDAD = "especialidad";
     private static final String FIELD_TIPO_CONTENIDO = "tipoContenido";
     private static final String FIELD_DEPARTAMENTO = "departamento";
+    private static final String FIELD_ALERT_ID = "alertId";
     private static final String STATUS = "status";
 
 
@@ -84,10 +86,10 @@ public class UserController {
 
 
 @PostMapping("/Registrar")
-public void registrar(@RequestBody Map<String, String> info) {
-    final String mfaPreferred = trimOrNull(info.get(FIELD_MFA_PREFERRED));
-    final String roleStr = trim(info.get(FIELD_ROLE));
-    final User.Role role = parseRole(roleStr);
+    public void registrar(@RequestBody Map<String, String> info) {
+        final String mfaPreferred = trimOrNull(info.get(FIELD_MFA_PREFERRED));
+        final String roleStr = trim(info.get(FIELD_ROLE));
+        final User.Role role = parseRole(roleStr);
     validarCamposObligatorios(
             info,
             FIELD_NOMBRE, FIELD_APELLIDOS, FIELD_EMAIL,
@@ -101,11 +103,20 @@ public void registrar(@RequestBody Map<String, String> info) {
     User.TipoContenido tipoContenido = null;
     String departamento = null;
 
+    java.util.List<String> misGustos = null;
+
     switch (role) {
         case USUARIO -> {
             validarCamposObligatorios(info, FIELD_FECHA_NAC);
             alias = trim(info.get(FIELD_ALIAS));
             fechaNac = trim(info.get(FIELD_FECHA_NAC));
+            String gustosRaw = trimOrNull(info.get("misGustos"));
+            if (gustosRaw != null && !gustosRaw.isBlank()) {
+                misGustos = java.util.Arrays.stream(gustosRaw.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toList();
+            }
         }
         case GESTOR_CONTENIDO -> {
             validarCamposObligatorios(info, FIELD_ALIAS,FIELD_FOTO, FIELD_ESPECIALIDAD, FIELD_TIPO_CONTENIDO,FIELD_ROLE);
@@ -132,12 +143,22 @@ public void registrar(@RequestBody Map<String, String> info) {
     validarContrasena(pwd, pwd2);
 
     try {
-        userService.registrar(
-                nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
-                descripcion, especialidad, tipoContenido,
-                departamento,
-                mfaPreferred 
-        );
+        if (misGustos != null) {
+            userService.registrar(
+                    nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
+                    descripcion, especialidad, tipoContenido,
+                    departamento,
+                    mfaPreferred,
+                    misGustos
+            );
+        } else {
+            userService.registrar(
+                    nombre, apellidos, alias, email, fechaNac, pwd, vip, foto, role,
+                    descripcion, especialidad, tipoContenido,
+                    departamento,
+                    mfaPreferred
+            );
+        }
     } catch (Exception e) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
     }
@@ -298,6 +319,32 @@ public void registrar(@RequestBody Map<String, String> info) {
         return userService.listarUsuarios();
     }
 
+    @GetMapping("/alertas")
+    public ResponseEntity<?> listarAlertas(@RequestParam String email) {
+        try {
+            List<Alert> alertas = userService.listarAlertas(email);
+            return ResponseEntity.ok(alertas);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/alertas/{alertId}")
+    public ResponseEntity<?> eliminarAlerta(@PathVariable("alertId") String alertId,
+                                            @RequestParam String email) {
+        try {
+            userService.eliminarAlertaUsuario(email, alertId);
+            return ResponseEntity.noContent().build();
+        } catch (com.example.usersbe.exceptions.UserNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage(), FIELD_ALERT_ID, alertId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(FIELD_MESSAGE, e.getMessage(), FIELD_ALERT_ID, alertId));
+        }
+    }
+
 
 
     @GetMapping("/obtenerPerfilUsuario")
@@ -354,6 +401,8 @@ public void registrar(@RequestBody Map<String, String> info) {
             String alias = (String) body.get(FIELD_ALIAS);
             String foto = (String) body.get("foto");
             Boolean vip = (Boolean) body.get("vip");
+            @SuppressWarnings("unchecked")
+            java.util.List<String> misGustos = (java.util.List<String>) body.getOrDefault("misGustos", null);
 
             return userService.updateProfile(
                     email,
@@ -361,7 +410,8 @@ public void registrar(@RequestBody Map<String, String> info) {
                     apellidos,
                     alias,
                     foto,
-                    vip);
+                    vip,
+                    misGustos);
 
         } catch (IllegalArgumentException | ValidationException | ForbiddenException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -475,7 +525,8 @@ public void registrar(@RequestBody Map<String, String> info) {
                     nombre, apellidos, alias, email, fechaNac, pwd,
                     vip, foto,
                     User.Role.GESTOR_CONTENIDO,
-                    descripcion, especialidad, tipoContenido);
+                    descripcion, especialidad, tipoContenido,
+                    null);
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(STATUS, "ok"));
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
